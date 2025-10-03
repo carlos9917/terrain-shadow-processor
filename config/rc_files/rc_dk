@@ -1,0 +1,5 @@
+DEBUG: 0
+MAPSET: PERMANENT
+GISDBASE: /home/grassuser/gis/grassdata
+LOCATION_NAME: mytemploc_dk
+GUI: text

@@ -1,0 +1,5 @@
+DEBUG: 0
+MAPSET: test2
+GISDBASE: /data/cap/sources/GIS/grass722/grassdata
+LOCATION_NAME: V3
+GUI: text

@@ -1,0 +1,5 @@
+DEBUG: 0
+MAPSET: PERMANENT
+GISDBASE: /data/cap/sources/GIS/grass722/grassdata
+LOCATION_NAME: test_clausList
+GUI: text

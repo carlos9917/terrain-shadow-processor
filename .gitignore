@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# GRASS GIS
+grassdata*/
+local_processing/
+grass_calls*.out
+
+# Processing artifacts
+*.tif
+list_of_tif_files.txt
+work_*/
+output_*/
+batch_*.csv
+
+# Logs
+logs/*.log
+*.log
+
+# Temporary files
+*.tmp
+out_*.txt
+deliver_station_data_*.txt
+email_*
+
+# Testing
+test_output/
+test_logs/
+test_work/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User-specific
+shadows_data.db
+station_data_*.csv
+station_noshadow_*.csv
