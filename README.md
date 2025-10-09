@@ -80,16 +80,7 @@ azimuth,horizon_height
 ## Documentation
 
 - [Quick Start Guide](QUICKSTART.md)
-- [Architecture Details](ARCHITECTURE_FIX.md)
-- [Troubleshooting](TROUBLESHOOTING_FIXES.md)
-- [Contributing](CONTRIBUTING.md)
 
-## Performance
-
-| Stations | Workers | Time | Speedup |
-|----------|---------|------|---------|
-| 150 | 4 | ~8 min | 3.5x |
-| 1000 | 8 | ~30 min | 6.3x |
 
 ## License
 
