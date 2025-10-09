@@ -17,7 +17,6 @@ grass_calls*.out
 
 # Processing artifacts
 *.tif
-list_of_tif_files.txt
 work_*/
 output_*/
 batch_*.csv
