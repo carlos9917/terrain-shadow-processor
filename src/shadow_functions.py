@@ -124,92 +124,104 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
     if step == 'import_tile':
         logger.info(f"GRASS commands are being logged to: {log_file}")
 
+    def log_grass_error(error_msg: str, log_file: str, num_lines: int = 20):
+        """Helper function to log error and show last lines of grass_calls file"""
+        logger.error(f"{error_msg}. Check {log_file} for details.")
+        # Try to read and log the last few lines of the grass_calls file
+        try:
+            if os.path.exists(log_file):
+                with open(log_file, 'r') as f:
+                    lines = f.readlines()
+                    last_lines = lines[-num_lines:] if len(lines) > num_lines else lines
+                    if last_lines:
+                        logger.error(f"Last {len(last_lines)} lines from {log_file}:")
+                        for line in last_lines:
+                            logger.error(f"  {line.rstrip()}")
+        except Exception as e:
+            logger.error(f"Could not read grass_calls log file: {e}")
+
     if step == 'set_resolution':
         logger.info(f"Setting resolution {options['resolution']}")
-        cmd = f'echo "call set_resol\\n" >> {log_file};g.region res={options["resolution"]} -p >> {log_file}'
+        cmd = f'echo "call set_resol\\n" >> {log_file};g.region res={options["resolution"]} -p >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting resolution failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"Setting resolution failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'set_domain':
         logger.info(f"Setting domain {options['region']}")
-        cmd = f'echo "call set_domain\\n" >> {log_file};g.region rast={options["region"]} res={options["resolution"]} -ap --verbose >> {log_file}'
+        cmd = f'echo "call set_domain\\n" >> {log_file};g.region rast={options["region"]} res={options["resolution"]} -ap --verbose >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting domain failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"Setting domain failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'check_tile':
-        cmd = f'echo "call check_tile\\n" >> {log_file};g.list ras >> {log_file}'
+        cmd = f'echo "call check_tile\\n" >> {log_file};g.list ras >> {log_file} 2>&1'
         logger.info(f"Checking tile {tile_data['surrounding_tile']}")
         try:
-            out = subprocess.check_output(cmd, shell=True)
+            out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
             return out
         except subprocess.CalledProcessError as err:
-            logger.error(f"Checking tile failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"Checking tile failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'import_tile':
         logger.info(f"Importing file {tile_data['tif_file']}")
         logger.info(f"Output tile {tile_data['surrounding_tile']}")
-        cmd = f'echo "call import_tile\\n" >> {log_file};r.in.gdal in={tile_data["tif_file"]} out={tile_data["surrounding_tile"]} -o memory=150 --verbose >> {log_file}'
+        cmd = f'echo "call import_tile\\n" >> {log_file};r.in.gdal in={tile_data["tif_file"]} out={tile_data["surrounding_tile"]} -o memory=150 --verbose >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Importing tif file {tile_data['tif_file']} failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"Importing tif file {tile_data['tif_file']} failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'set_region':
         logger.info(f"Setting region {tile_data['region']}")
-        cmd = f'echo "call set_region\\n" >> {log_file};g.region rast={tile_data["region"]} res={options["resolution"]} -ap --verbose >> {log_file}'
+        cmd = f'echo "call set_region\\n" >> {log_file};g.region rast={tile_data["region"]} res={options["resolution"]} -ap --verbose >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting region {tile_data['region']} failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"Setting region {tile_data['region']} failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'set_patch':
         logger.info(f"Setting patch {tile_data['region']}")
-        cmd = f'echo "call set_patch\\n" >> {log_file};r.patch input={tile_data["region"]} output=work_domain --overwrite --verbose >> {log_file}'
+        cmd = f'echo "call set_patch\\n" >> {log_file};r.patch input={tile_data["region"]} output=work_domain --overwrite --verbose >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting region {tile_data['region']} failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"Setting region {tile_data['region']} failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'calc_horizon':
         logger.info(f"Calculating horizon for {tile_data['coordinates_horizon']}")
-        cmd = f'r.horizon -d elevation=work_domain step={options["horizonstep"]} maxdistance={options["maxdistance"]} coordinates={tile_data["coordinates_horizon"]} > {tile_data["out_file"]}'
+        cmd = f'r.horizon -d elevation=work_domain step={options["horizonstep"]} maxdistance={options["maxdistance"]} coordinates={tile_data["coordinates_horizon"]} > {tile_data["out_file"]} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"calc_horizon failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"calc_horizon failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
     elif step == 'cleanup':
         logger.info("Cleanup region before processing next station")
-        cmd = 'g.remove -f type=raster name=work_domain --verbose'
+        cmd = f'g.remove -f type=raster name=work_domain --verbose >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"clean_up failed with error {err}. Check {log_file} for details.")
+            log_grass_error(f"clean_up failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
-
-def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.DataFrame,
-                                 shpars: Dict, out_dir: str, options: Dict, exit_on_error: bool = False,
-                                 log_dir: Optional[str] = None, batch_id: Optional[str] = None) -> None:
     """
     Calculate shadows for stations in the given stretch data.
 
