@@ -161,7 +161,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
                 raise
 
     elif step == 'check_tile':
-        cmd = f'echo "call check_tile\\n" >> {log_file};g.list ras >> {log_file} 2>&1'
+        cmd = f'echo "call check_tile\\n" >> {log_file};g.list rast >> {log_file} 2>&1'
         logger.info(f"Checking tile {tile_data['surrounding_tile']}")
         try:
             out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
@@ -174,13 +174,14 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
     elif step == 'import_tile':
         logger.info(f"Importing file {tile_data['tif_file']}")
         logger.info(f"Output tile {tile_data['surrounding_tile']}")
-        cmd = f'echo "call import_tile\\n" >> {log_file};r.in.gdal in={tile_data["tif_file"]} out={tile_data["surrounding_tile"]} -o memory=150 --verbose >> {log_file} 2>&1'
+        cmd = f'echo "call import_tile\\n" >> {log_file};r.in.gdal in={tile_data["tif_file"]} out={tile_data["surrounding_tile"]} -o memory=150 --overwrite --verbose >> {log_file} 2>&1'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
             log_grass_error(f"Importing tif file {tile_data['tif_file']} failed with error {err}", log_file)
             if exit_on_error:
                 raise
+
 
     elif step == 'set_region':
         logger.info(f"Setting region {tile_data['region']}")
@@ -263,6 +264,7 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
         # Import surrounding tiles into GRASS
         tile_data = {}
         region_tiles = []
+        imported_tiles = set()  # Track tiles already imported in this session
 
         for i, stile in enumerate(select_surrounding_tiles['surrounding_tile'].values):
             logger.info(f"Processing surrounding tile {stile}")
@@ -270,8 +272,22 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
             tile_data['surrounding_tile'] = stile
             tile_data['tif_file'] = tif_file
 
-            check_tile = call_grass('check_tile', shpars, tile_data, exit_on_error, log_dir, batch_id)
-            call_grass('import_tile', shpars, tile_data, exit_on_error, log_dir, batch_id)
+            # Check if tile already exists in GRASS session
+            check_result = call_grass('check_tile', shpars, tile_data, exit_on_error, log_dir, batch_id)
+            
+            # Parse the output to see if this tile is already imported
+            tile_exists = False
+            if check_result:
+                existing_tiles = check_result.decode('utf-8').strip().split('\n')
+                if stile in existing_tiles:
+                    tile_exists = True
+                    logger.info(f"Tile {stile} already exists in GRASS session, skipping import")
+            
+            # Only import if tile doesn't exist
+            if not tile_exists:
+                call_grass('import_tile', shpars, tile_data, exit_on_error, log_dir, batch_id)
+                imported_tiles.add(stile)
+            
             region_tiles.append(stile)
 
         # Define region
