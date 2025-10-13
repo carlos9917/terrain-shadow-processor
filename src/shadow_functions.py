@@ -222,6 +222,11 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
             if exit_on_error:
                 raise
 
+
+def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.DataFrame, 
+                                shpars: Dict, out_dir: str, options: Dict, 
+                                exit_on_error: bool = False, log_dir: Optional[str] = None, 
+                                batch_id: Optional[str] = None) -> None:
     """
     Calculate shadows for stations in the given stretch data.
 
@@ -248,6 +253,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
     """
     for tile in stretch_data['tile'].values:
         logger.info(f"Processing tile: {tile}")
+
 
         select_surrounding_tiles = tiles_needed[tiles_needed['station_tile'] == tile]
         logger.info(f"Surrounding tiles: {select_surrounding_tiles['surrounding_tile'].tolist()}")
