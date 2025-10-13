@@ -131,7 +131,14 @@ def main():
         help='Working directory for temporary files (default: current dir/work_TYPE)'
     )
 
+    parser.add_argument(
+        '--exit-on-grass-error',
+        action='store_true',
+        help='Exit immediately when a GRASS command fails (default: continue processing)'
+    )
+
     args = parser.parse_args()
+
 
     # Set up main logger
     log_file = setup_main_logger(args.log_dir, args.type)
@@ -177,8 +184,14 @@ def main():
         'output_dir': args.output_dir,
         'log_dir': args.log_dir,
         'work_dir': work_dir,
-        'src_dir': src_dir
+        'src_dir': src_dir,
+        'exit_on_grass_error': args.exit_on_grass_error
     }
+
+    logger.info("Configuration:")
+    for key, value in config.items():
+        logger.info(f"  {key}: {value}")
+
 
     logger.info("Configuration:")
     for key, value in config.items():

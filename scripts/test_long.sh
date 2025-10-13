@@ -16,7 +16,8 @@ $PYBIN /mnt/drive/hirtst/terrain-shadow-processor/src/run_parallel_processing.py
     --log-dir /mnt/drive/hirtst/terrain-shadow-processor/logs \
     --tiles-dir ${DSMPATH} \
     --work-dir /tmp/test_work \
-    --type road
+    --type road \
+    --exit-on-grass-error
 
 echo ""
 echo "Test completed!"

@@ -115,19 +115,23 @@ def process_batch_with_grass(args: Tuple) -> Dict:
 
         logger_batch.info(f"Using batch processor script: {batch_processor_script}")
 
+        # Build the command with optional exit-on-grass-error flag
+        exit_on_error_flag = '--exit-on-grass-error' if config.get('exit_on_grass_error', False) else ''
+
         script_content = f"""#!/bin/bash
 # GRASS batch job script for batch {batch_id}
 cd {config['work_dir']}
 
-{config['python_binary']} {batch_processor_script} \
-    --batch-csv {batch_csv} \
-    --config {config['config_file']} \
-    --output-dir {batch_output} \
-    --log-file {log_file} \
-    --tiles-dir {config['tiles_dir']} \
-    --tif-list {config['tif_list_file']} \
-    --batch-id {batch_id}
+{config['python_binary']} {batch_processor_script} \\
+    --batch-csv {batch_csv} \\
+    --config {config['config_file']} \\
+    --output-dir {batch_output} \\
+    --log-file {log_file} \\
+    --tiles-dir {config['tiles_dir']} \\
+    --tif-list {config['tif_list_file']} \\
+    --batch-id {batch_id} {exit_on_error_flag}
 """
+
 
         with open(batch_script, 'w') as f:
             f.write(script_content)

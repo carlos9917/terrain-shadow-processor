@@ -34,8 +34,10 @@ def main():
     parser.add_argument('--tiles-dir', required=True, help='Directory with TIF files')
     parser.add_argument('--tif-list', required=True, help='File with list of TIF files')
     parser.add_argument('--batch-id', required=True, help='Batch ID')
+    parser.add_argument('--exit-on-grass-error', action='store_true', help='Exit on GRASS errors')
 
     args = parser.parse_args()
+
 
     # Set up logging
     setup_logger(args.log_file)
@@ -67,10 +69,14 @@ def main():
         os.makedirs(args.output_dir, exist_ok=True)
 
         # Set GRASS resolution (we're inside GRASS session now)
-        sf.call_grass("set_resolution", shpars)
+        sf.call_grass("set_resolution", shpars, exit_on_error=args.exit_on_grass_error)
 
         # Process shadows
-        sf.calc_shadows_single_station(stretch_data, tiles_needed, shpars, args.output_dir, shpars)
+        sf.calc_shadows_single_station(stretch_data, tiles_needed, shpars, args.output_dir, shpars, 
+                                       exit_on_error=args.exit_on_grass_error)
+
+        logger.info(f"Batch {args.batch_id}: Completed successfully")
+
 
         logger.info(f"Batch {args.batch_id}: Completed successfully")
 
