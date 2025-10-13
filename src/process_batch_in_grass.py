@@ -68,15 +68,17 @@ def main():
         # Create output directory
         os.makedirs(args.output_dir, exist_ok=True)
 
+        # Get log directory from log file path
+        log_dir = os.path.dirname(args.log_file)
+
         # Set GRASS resolution (we're inside GRASS session now)
-        sf.call_grass("set_resolution", shpars, exit_on_error=args.exit_on_grass_error)
+        sf.call_grass("set_resolution", shpars, exit_on_error=args.exit_on_grass_error, 
+                     log_dir=log_dir, batch_id=args.batch_id)
 
         # Process shadows
         sf.calc_shadows_single_station(stretch_data, tiles_needed, shpars, args.output_dir, shpars, 
-                                       exit_on_error=args.exit_on_grass_error)
-
-        logger.info(f"Batch {args.batch_id}: Completed successfully")
-
+                                       exit_on_error=args.exit_on_grass_error,
+                                       log_dir=log_dir, batch_id=args.batch_id)
 
         logger.info(f"Batch {args.batch_id}: Completed successfully")
 

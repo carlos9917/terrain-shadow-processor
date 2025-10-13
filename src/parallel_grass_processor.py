@@ -91,6 +91,12 @@ def process_batch_with_grass(args: Tuple) -> Dict:
         # Initialize GRASS location with EPSG:25832
         logger_batch.info(f"Creating GRASS location at {grass_location}")
 
+        # Remove existing location if it exists (force overwrite)
+        if os.path.exists(grass_location):
+            import shutil
+            logger_batch.info(f"Removing existing GRASS location at {grass_location}")
+            shutil.rmtree(grass_location)
+
         # Copy template GRASS settings if available
         if os.path.exists(config['grass_settings']):
             import shutil

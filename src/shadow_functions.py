@@ -82,7 +82,8 @@ def read_conf(cfile: str) -> Dict[str, str]:
     return shadowPars
 
 
-def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_on_error: bool = False) -> Optional[bytes]:
+def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_on_error: bool = False, 
+               log_dir: Optional[str] = None, batch_id: Optional[str] = None) -> Optional[bytes]:
     """
     Call GRASS GIS routines for various processing steps.
 
@@ -96,13 +97,32 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         Data specific to the current tile being processed
     exit_on_error : bool, optional
         If True, raise exception on GRASS command failure. If False, log error and continue.
+    log_dir : str, optional
+        Directory to save grass_calls log files. If None, saves to current directory.
+    batch_id : str, optional
+        Batch identifier for unique log file naming
 
     Returns
     -------
     bytes or None
         Output from GRASS command for check_tile step, None otherwise
     """
-    log_file = f'grass_calls_{log_file_ts}.out'
+    # Create unique log file name with batch ID if provided
+    if batch_id is not None:
+        log_file_name = f'grass_calls_batch_{batch_id}_{log_file_ts}.out'
+    else:
+        log_file_name = f'grass_calls_{log_file_ts}.out'
+    
+    # Use log_dir if provided, otherwise use current directory
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, log_file_name)
+    else:
+        log_file = log_file_name
+    
+    # Log the grass_calls file location on first use (only for import_tile step as an example)
+    if step == 'import_tile':
+        logger.info(f"GRASS commands are being logged to: {log_file}")
 
     if step == 'set_resolution':
         logger.info(f"Setting resolution {options['resolution']}")
@@ -110,7 +130,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting resolution failed with error {err}")
+            logger.error(f"Setting resolution failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -120,7 +140,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting domain failed with error {err}")
+            logger.error(f"Setting domain failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -131,7 +151,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
             out = subprocess.check_output(cmd, shell=True)
             return out
         except subprocess.CalledProcessError as err:
-            logger.error(f"Checking tile failed with error {err}")
+            logger.error(f"Checking tile failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -142,7 +162,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Importing tif file {tile_data['tif_file']} failed with error {err}")
+            logger.error(f"Importing tif file {tile_data['tif_file']} failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -152,7 +172,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting region {tile_data['region']} failed with error {err}")
+            logger.error(f"Setting region {tile_data['region']} failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -162,7 +182,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"Setting region {tile_data['region']} failed with error {err}")
+            logger.error(f"Setting region {tile_data['region']} failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -172,7 +192,7 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"calc_horizon failed with error {err}")
+            logger.error(f"calc_horizon failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
@@ -182,13 +202,14 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
-            logger.error(f"clean_up failed with error {err}")
+            logger.error(f"clean_up failed with error {err}. Check {log_file} for details.")
             if exit_on_error:
                 raise
 
 
 def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.DataFrame,
-                                 shpars: Dict, out_dir: str, options: Dict, exit_on_error: bool = False) -> None:
+                                 shpars: Dict, out_dir: str, options: Dict, exit_on_error: bool = False,
+                                 log_dir: Optional[str] = None, batch_id: Optional[str] = None) -> None:
     """
     Calculate shadows for stations in the given stretch data.
 
@@ -208,6 +229,10 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
         Additional processing options
     exit_on_error : bool, optional
         If True, raise exception on GRASS command failure
+    log_dir : str, optional
+        Directory to save grass_calls log files
+    batch_id : str, optional
+        Batch identifier for unique log file naming
     """
     for tile in stretch_data['tile'].values:
         logger.info(f"Processing tile: {tile}")
@@ -227,8 +252,8 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
             tile_data['surrounding_tile'] = stile
             tile_data['tif_file'] = tif_file
 
-            check_tile = call_grass('check_tile', shpars, tile_data, exit_on_error)
-            call_grass('import_tile', shpars, tile_data, exit_on_error)
+            check_tile = call_grass('check_tile', shpars, tile_data, exit_on_error, log_dir, batch_id)
+            call_grass('import_tile', shpars, tile_data, exit_on_error, log_dir, batch_id)
             region_tiles.append(stile)
 
         # Define region
@@ -238,8 +263,8 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
         tile_data['region'] = region
 
         # Establish the working domain
-        call_grass('set_region', shpars, tile_data, exit_on_error)
-        call_grass('set_patch', shpars, tile_data, exit_on_error)
+        call_grass('set_region', shpars, tile_data, exit_on_error, log_dir, batch_id)
+        call_grass('set_patch', shpars, tile_data, exit_on_error, log_dir, batch_id)
         tile_data = {}
 
         # Process each station coordinate
@@ -256,10 +281,10 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
             )
             tile_data['station_id'] = station_id
 
-            call_grass('calc_horizon', shpars, tile_data, exit_on_error)
+            call_grass('calc_horizon', shpars, tile_data, exit_on_error, log_dir, batch_id)
 
         # Cleanup after processing this tile
-        call_grass('cleanup', shpars, tile_data, exit_on_error)
+        call_grass('cleanup', shpars, tile_data, exit_on_error, log_dir, batch_id)
 
 
 
