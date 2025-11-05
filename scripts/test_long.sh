@@ -2,7 +2,7 @@
 # Quick test script with just 5 stations
 set -e
 
-CSV=/mnt/drive/hirtst/terrain-shadow-processor/tests/still_missing_20230124_utm.csv
+CSV=/mnt/drive/hirtst/terrain-shadow-processor/tests/test_1e5_stations_utm.csv
 NP=10
 echo "Running parallel processing with $NP workers..."
 source /mnt/drive/hirtst/python-shadows/bin/activate
