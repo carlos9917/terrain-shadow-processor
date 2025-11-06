@@ -75,10 +75,23 @@ def main():
         sf.call_grass("set_resolution", shpars, exit_on_error=args.exit_on_grass_error, 
                      log_dir=log_dir, batch_id=args.batch_id)
 
+        # Import water mask if path is provided
+        if 'water_mask_path' in shpars and shpars['water_mask_path']:
+            logger.info(f"Batch {args.batch_id}: Importing water mask from {shpars['water_mask_path']}")
+            sf.call_grass("import_water_mask", shpars, exit_on_error=args.exit_on_grass_error,
+                         log_dir=log_dir, batch_id=args.batch_id)
+        else:
+            logger.info(f"Batch {args.batch_id}: No water_mask_path specified in config, skipping water mask import.")
+
         # Process shadows
         sf.calc_shadows_single_station(stretch_data, tiles_needed, shpars, args.output_dir, shpars, 
                                        exit_on_error=args.exit_on_grass_error,
                                        log_dir=log_dir, batch_id=args.batch_id)
+
+        # Process additional terrain features
+        sf.calc_terrain_features_single_station(stretch_data, tiles_needed, shpars, args.output_dir, shpars,
+                                                exit_on_error=args.exit_on_grass_error,
+                                                log_dir=log_dir, batch_id=args.batch_id)
 
         logger.info(f"Batch {args.batch_id}: Completed successfully")
 

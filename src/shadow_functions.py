@@ -77,7 +77,15 @@ def read_conf(cfile: str) -> Dict[str, str]:
             options = conf.options(sec)
             for param in options:
                 paramValue = conf.get(sec, param)
-                shadowPars[param] = paramValue
+                # Convert known parameters to appropriate types
+                if param in ['maxdistance', 'resolution', 'horizonstep', 'tileside', 'mindist', 'mintiles', 'geomorphon_search_radius']:
+                    try:
+                        shadowPars[param] = float(paramValue) if '.' in paramValue else int(paramValue)
+                    except ValueError:
+                        logger.warning(f"Could not convert {param}={paramValue} to number. Keeping as string.")
+                        shadowPars[param] = paramValue
+                else:
+                    shadowPars[param] = paramValue
 
     return shadowPars
 
@@ -182,6 +190,16 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
             if exit_on_error:
                 raise
 
+    elif step == 'import_water_mask':
+        logger.info(f"Importing water mask from {options['water_mask_path']}")
+        cmd = f'echo "call import_water_mask\\n" >> {log_file};r.in.gdal in={options["water_mask_path"]} out=water_mask --overwrite --verbose >> {log_file} 2>&1'
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        except subprocess.CalledProcessError as err:
+            log_grass_error(f"Importing water mask failed with error {err}", log_file)
+            if exit_on_error:
+                raise
+
 
     elif step == 'set_region':
         logger.info(f"Setting region {tile_data['region']}")
@@ -220,6 +238,47 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError as err:
             log_grass_error(f"clean_up failed with error {err}", log_file)
+            if exit_on_error:
+                raise
+
+    elif step == 'get_altitude':
+        logger.info(f"Getting altitude for {tile_data['coordinates']}")
+        cmd = f'r.what map=work_domain coordinates={tile_data["coordinates"]} -r >> {log_file} 2>&1'
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+            return out.decode('utf-8').strip()
+        except subprocess.CalledProcessError as err:
+            log_grass_error(f"Getting altitude failed with error {err}", log_file)
+            if exit_on_error:
+                raise
+
+    elif step == 'calc_distance_to_water':
+        logger.info(f"Calculating distance to water for {tile_data['coordinates']}")
+        # Assuming 'water_mask' raster exists in the GRASS location
+        cmd = f'r.grow.distance input=water_mask distance=distance_to_water --overwrite >> {log_file} 2>&1'
+        try:
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+            # Now query the distance at the station coordinate
+            cmd_what = f'r.what map=distance_to_water coordinates={tile_data["coordinates"]} -r >> {log_file} 2>&1'
+            out = subprocess.check_output(cmd_what, stderr=subprocess.STDOUT, shell=True)
+            return out.decode('utf-8').strip()
+        except subprocess.CalledProcessError as err:
+            log_grass_error(f"Calculating distance to water failed with error {err}", log_file)
+            if exit_on_error:
+                raise
+
+    elif step == 'calc_geomorphon':
+        logger.info(f"Calculating geomorphon for {tile_data['coordinates']}")
+        # Assuming 'work_domain' is the DEM
+        cmd = f'r.geomorphon elevation=work_domain forms=geomorphon_forms search={options["geomorphon_search_radius"]} --overwrite >> {log_file} 2>&1'
+        try:
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+            # Now query the geomorphon form at the station coordinate
+            cmd_what = f'r.what map=geomorphon_forms coordinates={tile_data["coordinates"]} -r >> {log_file} 2>&1'
+            out = subprocess.check_output(cmd_what, stderr=subprocess.STDOUT, shell=True)
+            return out.decode('utf-8').strip()
+        except subprocess.CalledProcessError as err:
+            log_grass_error(f"Calculating geomorphon failed with error {err}", log_file)
             if exit_on_error:
                 raise
 
@@ -317,8 +376,118 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
 
             call_grass('calc_horizon', shpars, tile_data, exit_on_error, log_dir, batch_id)
 
-        # Cleanup after processing this tile
-        call_grass('cleanup', shpars, tile_data, exit_on_error, log_dir, batch_id)
+            call_grass('cleanup', shpars, tile_data, exit_on_error, log_dir, batch_id)
+
+
+def calc_terrain_features_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.DataFrame,
+                                         shpars: Dict, out_dir: str, options: Dict,
+                                         exit_on_error: bool = False, log_dir: Optional[str] = None,
+                                         batch_id: Optional[str] = None) -> None:
+    """
+    Calculate additional terrain features for stations in the given stretch data.
+    This includes altitude, distance to sea/lake, and subgrid geometry.
+
+    Parameters
+    ----------
+    stretch_data : pd.DataFrame
+        Station data
+    tiles_needed : pd.DataFrame
+        Information about tiles needed for processing (though not directly used here,
+        it implies the DEM is already loaded/available as 'work_domain')
+    shpars : dict
+        Shadow calculation parameters (used for general GRASS options)
+    out_dir : str
+        Output directory for results
+    options : dict
+        Additional processing options, including 'geomorphon_search_radius'
+    exit_on_error : bool, optional
+        If True, raise exception on GRASS command failure
+    log_dir : str, optional
+        Directory to save grass_calls log files
+    batch_id : str, optional
+        Batch identifier for unique log file naming
+    """
+    logger.info(f"Starting terrain feature calculation for batch {batch_id}")
+
+    # Prepare a list to store results for this batch
+    results_list = []
+
+    # Assuming 'work_domain' (DEM) is already set up from previous steps (e.g., shadow calculation)
+    # If not, this function would need to handle importing the DEM.
+
+    for index, row in stretch_data.iterrows():
+        station_id = row['station']
+        county = row['county']
+        roadsection = row['roadsection']
+        easting = row['easting']
+        norting = row['norting']
+
+        coordinates = f"{easting},{norting}"
+        station_tile_data = {'coordinates': coordinates}
+
+        logger.info(f"Processing terrain features for station: {station_id} ({coordinates})")
+
+        # 1. Get Altitude
+        altitude = None
+        try:
+            alt_output = call_grass('get_altitude', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
+            if alt_output:
+                # r.what output format: "easting|norting|value" or "easting|norting|*" if no data
+                parts = alt_output.split('|')
+                if len(parts) == 3 and parts[2] != '*':
+                    altitude = float(parts[2])
+        except Exception as e:
+            logger.error(f"Failed to get altitude for station {station_id}: {e}")
+
+        # 2. Calculate Distance to Sea/Lake
+        distance_to_water = None
+        try:
+            # Ensure 'water_mask' is available. This might need a separate import step
+            # or a check if it's already in the GRASS mapset.
+            # For now, assuming it's available.
+            dist_output = call_grass('calc_distance_to_water', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
+            if dist_output:
+                parts = dist_output.split('|')
+                if len(parts) == 3 and parts[2] != '*':
+                    distance_to_water = float(parts[2])
+        except Exception as e:
+            logger.error(f"Failed to get distance to water for station {station_id}: {e}")
+
+        # 3. Calculate Subgrid Geometry (Geomorphon)
+        geomorphon_form = None
+        try:
+            # r.geomorphon needs a search radius, which should be in options
+            if 'geomorphon_search_radius' not in options:
+                logger.warning("geomorphon_search_radius not found in options. Using default 3.")
+                options['geomorphon_search_radius'] = 3 # Default value
+
+            geom_output = call_grass('calc_geomorphon', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
+            if geom_output:
+                parts = geom_output.split('|')
+                if len(parts) == 3 and parts[2] != '*':
+                    geomorphon_form = int(parts[2]) # Geomorphon outputs integer codes
+        except Exception as e:
+            logger.error(f"Failed to get geomorphon form for station {station_id}: {e}")
+
+        results_list.append({
+            'station': station_id,
+            'county': county,
+            'roadsection': roadsection,
+            'easting': easting,
+            'norting': norting,
+            'altitude': altitude,
+            'distance_to_water': distance_to_water,
+            'geomorphon_form': geomorphon_form
+        })
+
+    # Save results to a temporary CSV or directly to HDF5
+    # For now, let's save to a CSV in the output directory
+    output_csv_path = os.path.join(out_dir, f'terrain_features_batch_{batch_id}.csv')
+    results_df = pd.DataFrame(results_list)
+    results_df.to_csv(output_csv_path, index=False)
+    logger.info(f"Saved terrain features for batch {batch_id} to {output_csv_path}")
+
+    # TODO: Integrate HDF5 saving as a next step, potentially merging these CSVs.
 
 
 
