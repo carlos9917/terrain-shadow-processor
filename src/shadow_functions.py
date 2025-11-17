@@ -243,10 +243,13 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
 
     elif step == 'get_altitude':
         logger.info(f"Getting altitude for {tile_data['coordinates']}")
-        cmd = f'r.what map=work_domain coordinates={tile_data["coordinates"]} -r >> {log_file} 2>&1'
+        cmd = f'echo "call get_altitude\\n" >> {log_file};r.what map=work_domain coordinates={tile_data["coordinates"]} -r'
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-            return out.decode('utf-8').strip()
+            result = out.decode('utf-8').strip()
+            with open(log_file, 'a') as f:
+                f.write(result + '\n')
+            return result
         except subprocess.CalledProcessError as err:
             log_grass_error(f"Getting altitude failed with error {err}", log_file)
             if exit_on_error:
@@ -269,18 +272,21 @@ def call_grass(step: str, options: Dict, tile_data: Optional[Dict] = None, exit_
 
     elif step == 'calc_geomorphon':
         logger.info(f"Calculating geomorphon for {tile_data['coordinates']}")
-        # Assuming 'work_domain' is the DEM
-        cmd = f'r.geomorphon elevation=work_domain forms=geomorphon_forms search={options["geomorphon_search_radius"]} --overwrite >> {log_file} 2>&1'
+        cmd = f'echo "call calc_geomorphon\\n" >> {log_file};r.geomorphon elevation=work_domain forms=geomorphon_forms search={options["geomorphon_search_radius"]} --overwrite >> {log_file} 2>&1'
         try:
             subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
             # Now query the geomorphon form at the station coordinate
-            cmd_what = f'r.what map=geomorphon_forms coordinates={tile_data["coordinates"]} -r >> {log_file} 2>&1'
+            cmd_what = f'r.what map=geomorphon_forms coordinates={tile_data["coordinates"]} -r'
             out = subprocess.check_output(cmd_what, stderr=subprocess.STDOUT, shell=True)
-            return out.decode('utf-8').strip()
+            result = out.decode('utf-8').strip()
+            with open(log_file, 'a') as f:
+                f.write(result + '\n')
+            return result
         except subprocess.CalledProcessError as err:
             log_grass_error(f"Calculating geomorphon failed with error {err}", log_file)
             if exit_on_error:
                 raise
+
 
 
 def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.DataFrame, 
@@ -376,7 +382,8 @@ def calc_shadows_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.Dat
 
             call_grass('calc_horizon', shpars, tile_data, exit_on_error, log_dir, batch_id)
 
-            call_grass('cleanup', shpars, tile_data, exit_on_error, log_dir, batch_id)
+            # NOTE: Do NOT cleanup work_domain here - it's still needed by calc_terrain_features_single_station
+
 
 
 def calc_terrain_features_single_station(stretch_data: pd.DataFrame, tiles_needed: pd.DataFrame,
@@ -432,26 +439,28 @@ def calc_terrain_features_single_station(stretch_data: pd.DataFrame, tiles_neede
         try:
             alt_output = call_grass('get_altitude', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
             if alt_output:
-                # r.what output format: "easting|norting|value" or "easting|norting|*" if no data
+                # r.what output format: "easting|norting|site_name|value|color" 
                 parts = alt_output.split('|')
-                if len(parts) == 3 and parts[2] != '*':
-                    altitude = float(parts[2])
+                if len(parts) >= 4 and parts[3] != '*':
+                    altitude = float(parts[3])
         except Exception as e:
             logger.error(f"Failed to get altitude for station {station_id}: {e}")
 
         # 2. Calculate Distance to Sea/Lake
+        # DEACTIVATED: No water mask data available
         distance_to_water = None
-        try:
-            # Ensure 'water_mask' is available. This might need a separate import step
-            # or a check if it's already in the GRASS mapset.
-            # For now, assuming it's available.
-            dist_output = call_grass('calc_distance_to_water', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
-            if dist_output:
-                parts = dist_output.split('|')
-                if len(parts) == 3 and parts[2] != '*':
-                    distance_to_water = float(parts[2])
-        except Exception as e:
-            logger.error(f"Failed to get distance to water for station {station_id}: {e}")
+        # try:
+        #     # Ensure 'water_mask' is available. This might need a separate import step
+        #     # or a check if it's already in the GRASS mapset.
+        #     # For now, assuming it's available.
+        #     dist_output = call_grass('calc_distance_to_water', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
+        #     if dist_output:
+        #         parts = dist_output.split('|')
+        #         if len(parts) == 3 and parts[2] != '*':
+        #             distance_to_water = float(parts[2])
+        # except Exception as e:
+        #     logger.error(f"Failed to get distance to water for station {station_id}: {e}")
+        logger.debug(f"Distance to water calculation is deactivated for station {station_id}")
 
         # 3. Calculate Subgrid Geometry (Geomorphon)
         geomorphon_form = None
@@ -463,11 +472,13 @@ def calc_terrain_features_single_station(stretch_data: pd.DataFrame, tiles_neede
 
             geom_output = call_grass('calc_geomorphon', shpars, station_tile_data, exit_on_error, log_dir, batch_id)
             if geom_output:
+                # r.what output format: "easting|norting|site_name|value|color"
                 parts = geom_output.split('|')
-                if len(parts) == 3 and parts[2] != '*':
-                    geomorphon_form = int(parts[2]) # Geomorphon outputs integer codes
+                if len(parts) >= 4 and parts[3] != '*':
+                    geomorphon_form = int(parts[3]) # Geomorphon outputs integer codes
         except Exception as e:
             logger.error(f"Failed to get geomorphon form for station {station_id}: {e}")
+
 
         results_list.append({
             'station': station_id,

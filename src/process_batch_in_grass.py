@@ -93,7 +93,13 @@ def main():
                                                 exit_on_error=args.exit_on_grass_error,
                                                 log_dir=log_dir, batch_id=args.batch_id)
 
+        # Cleanup work_domain after all processing is complete
+        logger.info(f"Batch {args.batch_id}: Cleaning up work_domain")
+        sf.call_grass('cleanup', shpars, exit_on_error=args.exit_on_grass_error,
+                     log_dir=log_dir, batch_id=args.batch_id)
+
         logger.info(f"Batch {args.batch_id}: Completed successfully")
+
 
     except Exception as e:
         logger.error(f"Batch {args.batch_id}: Failed with error: {str(e)}", exc_info=True)
