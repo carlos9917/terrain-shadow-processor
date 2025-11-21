@@ -1,0 +1,4 @@
+Hello ${PERSON_NAME}, 
+
+This is an automated message generated with new station data.
+Please find the data below

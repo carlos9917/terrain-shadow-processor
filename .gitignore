@@ -29,7 +29,6 @@ logs/*.log
 *.tmp
 out_*.txt
 deliver_station_data_*.txt
-email_*
 
 # Testing
 test_output/
