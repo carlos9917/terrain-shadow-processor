@@ -1,33 +1,13 @@
 #!/usr/bin/env bash
-# Main crontab script for daily shadow processing with parallel execution
-# Refactored version - runs both road and noshadow stations in parallel
-#
-# Crontab entry:
-# 0 0 * * * cd /mnt/drive/hirtst/DSM_DK; /mnt/drive/hirtst/terrain-shadow-processor/scripts/loke_shadows_daily_crontab.sh
+# Script to run both shadows and noshadows data on a crontab in loke
 
-set -e  # Exit on error
+TODAY=`date '+%Y%m%d'`
+#Processing both data sets for shadows
+echo "Doing road stations"
+./daily_road_stations.sh 
+pid=$!
+wait $pid
+echo "Daily processing $pid finished"
+echo "Doing new shadow data"
+./daily_new_shadows.sh >& ./out_noshadows_call_${TODAY}
 
-TODAY=$(date '+%Y%m%d')
-
-# Activate Python environment
-source /mnt/drive/hirtst/python-shadows/bin/activate
-
-# Source environment configuration
-source /mnt/drive/hirtst/terrain-shadow-processor/env.sh
-
-echo "=============================================="
-echo "Daily shadow processing (PARALLEL) on $TODAY"
-echo "=============================================="
-echo "Number of workers: ${NUM_WORKERS}"
-echo "Batch size: ${BATCH_SIZE}"
-echo ""
-
-# Run the parallel processing script
-cd /mnt/drive/hirtst/DSM_DK
-
-/mnt/drive/hirtst/terrain-shadow-processor/scripts/daily_processing_parallel.sh
-
-echo ""
-echo "=============================================="
-echo "Daily processing completed"
-echo "=============================================="

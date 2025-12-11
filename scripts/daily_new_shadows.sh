@@ -64,3 +64,6 @@ if [ -s $NEWDATA ]; then
  python ./email_new_shadows.py $MESSAGE test_contacts.txt
 fi
 
+# Copying the data to scratch
+echo "Copying the data to scratch area"
+scp $NEWDATA /dmidata/scratch/10day/cap/glatmodel

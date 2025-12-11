@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 # Set all paths and location of repo
-source ./env.sh
+source ../env.sh
 
 # Use separate directories for different purposes
 STATION_DATA_DIR=$PWD  # Where station CSVs are downloaded
